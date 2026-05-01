@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rummage Master</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234f46e5'/><path d='M30 30h30l20 20-30 30-20-20V30z' fill='white'/><circle cx='40' cy='45' r='5' fill='%234f46e5'/><path d='M45 25l5-10 5 10h10l-8 7 3 11-10-6-10 6 3-11-8-7h10z' fill='%23fbbf24'/></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .animate-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .modal-backdrop { background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .transition-all { transition: all 0.3s ease-in-out; }
+        
+        /* Brand Gradient */
+        .brand-gradient {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        }
+
+        /* Adjustment for Tiiny.host / Free Hosting Banners */
+        .safe-bottom-nav {
+            bottom: 65px !important; /* Lifts the nav bar above the hosting banner */
+        }
+    </style>
+</head>
+<body class="bg-slate-50 pb-44 text-slate-900 font-sans min-h-screen">
+
+    <div id="app">
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="flex items-center justify-center h-screen p-6">
+            <div id="loading-spinner" class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            <div id="setup-message" class="hidden text-center p-8 max-w-sm bg-white rounded-3xl shadow-xl animate-in">
+                <div id="setup-icon-container" class="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="settings" class="w-8 h-8"></i>
+                </div>
+                <h2 id="setup-title" class="text-xl font-bold text-slate-800 mb-2">Firestore Required</h2>
+                <div class="text-slate-500 text-sm mb-6">Database is connected, but no collections found. Add your first item to start!</div>
+                <button onclick="location.reload()" class="w-full py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg">Refresh App</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div id="main-content" class="hidden">
+            <nav class="sticky top-0 z-40 bg-white border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm">
+                <div class="flex items-center gap-3">
+                    <!-- Brand Logo SVG -->
+                    <div class="relative h-10 w-10 flex-shrink-0">
+                        <svg viewBox="0 0 100 100" class="h-full w-full drop-shadow-sm">
+                            <rect width="100" height="100" rx="24" fill="#4f46e5" />
+                            <path d="M25 35h35l18 18-32 32-21-21V35z" fill="white" />
+                            <circle cx="36" cy="48" r="5" fill="#4f46e5" />
+                            <path d="M42 22l6-10 6 10h12l-10 8 4 12-12-8-12 8 4-12-10-8h12z" fill="#fbbf24" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-black text-xl leading-none tracking-tight">Rummage<span class="text-indigo-600">Master</span></h1>
+                        <p class="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Inventory & Sales</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="register-btn" onclick="toggleRegister(true)" class="hidden relative bg-slate-100 p-2.5 rounded-2xl text-slate-600 active:scale-95 transition-all hover:bg-indigo-50 hover:text-indigo-600">
+                        <i data-lucide="shopping-cart" class="w-5 h-5"></i>
+                        <span id="cart-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse">0</span>
+                    </button>
+                </div>
+            </nav>
+
+            <main id="view-container" class="max-w-md mx-auto p-4 space-y-6"></main>
+
+            <!-- Nav Bar (LIFTED to avoid hosting banner) -->
+            <nav class="fixed left-4 right-4 safe-bottom-nav bg-white border border-slate-200 p-2 flex justify-around items-center z-40 max-w-sm mx-auto rounded-3xl shadow-[0_10px_30px_-5px_rgba(0,0,0,0.15)]">
+                <button onclick="switchView('dashboard')" id="nav-dashboard" class="flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors text-indigo-600">
+                    <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
+                    <span class="text-[9px] font-black uppercase tracking-widest">Dash</span>
+                </button>
+                <button onclick="switchView('inventory')" id="nav-inventory" class="flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors text-slate-400">
+                    <i data-lucide="package" class="w-6 h-6"></i>
+                    <span class="text-[9px] font-black uppercase tracking-widest">Items</span>
+                </button>
+                <button onclick="switchView('history')" id="nav-history" class="flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors text-slate-400">
+                    <i data-lucide="history" class="w-6 h-6"></i>
+                    <span class="text-[9px] font-black uppercase tracking-widest">Sales</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="register-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-end sm:items-center justify-center p-0 sm:p-4"></div>
+
+    <div id="add-item-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in">
+            <h3 class="text-xl font-bold text-slate-800 mb-4">Add to Inventory</h3>
+            <form onsubmit="event.preventDefault(); handleAddItem();" class="space-y-4">
+                <input id="new-item-name" type="text" placeholder="Item Name" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-indigo-500">
+                <div class="grid grid-cols-2 gap-2">
+                    <input id="new-item-seller" type="text" placeholder="Initials" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl uppercase font-bold outline-none focus:border-indigo-500">
+                    <input id="new-item-price" type="number" step="0.01" placeholder="Price" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl font-bold outline-none focus:border-indigo-500">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Starting Quantity</label>
+                    <input id="new-item-qty" type="number" value="1" min="1" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl font-bold outline-none focus:border-indigo-500">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="toggleAddItem(false)" class="flex-1 py-3 font-bold text-slate-400">Cancel</button>
+                    <button type="submit" class="flex-[2] py-3 font-bold text-white bg-indigo-600 rounded-xl shadow-lg active:scale-95 transition-all">Save Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="edit-item-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in">
+            <h3 class="text-xl font-bold text-slate-800 mb-4">Edit Item</h3>
+            <form onsubmit="event.preventDefault(); handleUpdateItem();" class="space-y-4">
+                <input id="edit-item-name" type="text" placeholder="Item Name" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-indigo-500">
+                <div class="grid grid-cols-2 gap-2">
+                    <input id="edit-item-seller" type="text" placeholder="Initials" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl uppercase font-bold outline-none focus:border-indigo-500">
+                    <input id="edit-item-price" type="number" step="0.01" placeholder="Price" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl font-bold outline-none focus:border-indigo-500">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Stock Quantity</label>
+                    <input id="edit-item-qty" type="number" min="0" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl font-bold outline-none focus:border-indigo-500">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="button" onclick="toggleEditItem(false)" class="flex-1 py-3 font-bold text-slate-400">Cancel</button>
+                    <button type="submit" class="flex-[2] py-3 font-bold text-white bg-indigo-600 rounded-xl shadow-lg active:scale-95 transition-all">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="start-sale-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in">
+            <h3 class="text-xl font-bold text-slate-800 mb-2">Open Register</h3>
+            <form onsubmit="event.preventDefault(); handleOpenRegister();" class="space-y-4">
+                <input id="sale-session-name" type="text" placeholder="Sale Name (e.g. Day 1)" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-indigo-500 font-bold">
+                <button type="submit" class="w-full py-4 font-bold text-white bg-indigo-600 rounded-xl shadow-lg active:scale-95 transition-all">Start Sale Session</button>
+                <button type="button" onclick="document.getElementById('start-sale-modal').classList.add('hidden')" class="w-full text-slate-400 text-sm font-bold">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="close-confirm-modal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in text-center">
+            <h3 class="text-xl font-bold text-slate-800 mb-2">Close Register?</h3>
+            <p class="text-slate-500 text-sm mb-6">Archive totals for this session?</p>
+            <div class="flex flex-col gap-2">
+                <button onclick="confirmCloseRegister()" class="w-full py-4 font-bold text-white bg-red-600 rounded-xl shadow-lg active:scale-95 transition-all">Yes, Close</button>
+                <button onclick="document.getElementById('close-confirm-modal').classList.add('hidden')" class="w-full py-4 font-bold text-slate-400">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="hidden fixed top-16 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full shadow-lg border animate-in flex items-center gap-2">
+        <span id="notification-text" class="text-sm font-bold"></span>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getFirestore, collection, doc, addDoc, onSnapshot, updateDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+        // --- App State ---
+        let currentView = 'dashboard';
+        let items = [];
+        let sessions = [];
+        let activeSession = null;
+        let cart = [];
+        let expandedSessionId = null; 
+        let expandedInventoryId = null;
+        let expandedSellers = new Set();
+        let editingItemId = null;
+        let inventorySearchQuery = '';
+
+        const PAYMENT_METHODS = [
+            { id: 'cash', label: 'Cash', icon: 'banknote', color: 'text-green-600' },
+            { id: 'venmo', label: 'Venmo', icon: 'smartphone', color: 'text-blue-500' },
+            { id: 'paypal', label: 'PayPal', icon: 'credit-card', color: 'text-indigo-600' },
+            { id: 'other', label: 'Other', icon: 'badge-dollar-sign', color: 'text-gray-600' }
+        ];
+
+        // --- Firebase Init ---
+        const manualConfig = {
+          apiKey: "AIzaSyDtA4Hd6N3HDvpCmt8_G6aqOoD-3dF30WE",
+          authDomain: "rummagemaster1102.firebaseapp.com",
+          projectId: "rummagemaster1102",
+          storageBucket: "rummagemaster1102.firebasestorage.app",
+          messagingSenderId: "1018951340020",
+          appId: "1:1018951340020:web:b9597048012b761f83b3a1"
+        }; 
+
+        const appId = manualConfig.projectId;
+        const appInstance = initializeApp(manualConfig);
+        const auth = getAuth(appInstance);
+        const db = getFirestore(appInstance);
+
+        // --- Global Logic ---
+
+        window.render = function() {
+            const container = document.getElementById('view-container');
+            if (!container) return;
+            if (currentView === 'dashboard') renderDashboard(container);
+            else if (currentView === 'inventory') renderInventory(container);
+            else if (currentView === 'history') renderHistory(container);
+            lucide.createIcons();
+        };
+
+        function renderDashboard(container) {
+            if (!activeSession) { renderClosedDashboard(container); return; }
+            const sessionSales = items.filter(i => i.status === 'sold' && i.sessionId === activeSession.id);
+            const total = sessionSales.reduce((s, i) => s + (i.soldPrice || 0), 0);
+            const itemQty = sessionSales.reduce((s, i) => s + (i.qtySold || 1), 0);
+            const txs = new Set(sessionSales.map(i => i.transactionId)).size;
+            const payBreakdown = {}; PAYMENT_METHODS.forEach(m => payBreakdown[m.id] = sessionSales.filter(s=>s.paymentMethod===m.id).reduce((sum,i)=>sum+i.soldPrice,0));
+            const sellerStats = {}; sessionSales.forEach(i => { if(!sellerStats[i.seller]) sellerStats[i.seller] = {total:0, items:0, txs: new Set()}; sellerStats[i.seller].total += i.soldPrice; sellerStats[i.seller].items += (i.qtySold||1); if(i.transactionId) sellerStats[i.seller].txs.add(i.transactionId); });
+
+            container.innerHTML = `<div class="space-y-6 animate-in">
+                <div class="bg-indigo-600 p-4 rounded-2xl text-white shadow-lg flex justify-between items-center">
+                    <div><div class="text-[10px] font-black uppercase opacity-70 tracking-widest">Active Sale</div><div class="text-lg font-bold">${activeSession.name}</div><div class="text-[10px] opacity-80">${activeSession.date}</div></div>
+                    <button onclick="handleCloseRegister()" class="bg-white/20 p-2 rounded-xl text-[10px] font-bold uppercase transition-all">Close</button>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                        <span class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Profit</span>
+                        <div class="text-2xl font-black text-indigo-600">$${total.toFixed(2)}</div>
+                        <div class="text-[10px] text-slate-400 mt-1 font-bold">${txs} Txns • ${itemQty} Items</div>
+                    </div>
+                    <button onclick="toggleRegister(true)" class="bg-white p-4 rounded-2xl border border-indigo-600 text-indigo-600 flex flex-col items-center justify-center active:bg-indigo-50">
+                        <i data-lucide="zap" class="w-6 h-6 mb-1 fill-indigo-100"></i><span class="font-black text-sm">Register</span>
+                    </button>
+                </div>
+                <div class="bg-white rounded-2xl p-5 space-y-4 shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-2"><i data-lucide="users" class="w-4 h-4 text-indigo-500"></i>Seller Performance</h3>
+                    <div class="space-y-2">${Object.entries(sellerStats).sort((a,b)=>b[1].total-a[1].total).map(([name, s]) => `<div class="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100"><div><div class="text-sm font-bold text-slate-800">${name}</div><div class="text-[9px] text-slate-400 font-bold uppercase tracking-tight">${s.items} items • ${s.txs.size} txns</div></div><span class="text-indigo-600 font-black text-sm">$${s.total.toFixed(2)}</span></div>`).join('') || '<p class="text-center italic text-slate-300 text-sm py-4 tracking-tight">No sales recorded</p>'}</div>
+                </div>
+            </div>`;
+        }
+
+        function renderClosedDashboard(container) {
+            const closed = sessions.filter(s => s.status === 'closed').sort((a,b) => b.closedAt - a.closedAt);
+            container.innerHTML = `<div class="space-y-6 animate-in">
+                <div class="bg-slate-800 p-8 rounded-[2rem] text-white text-center shadow-2xl relative overflow-hidden">
+                    <h2 class="text-2xl font-bold mb-2 uppercase tracking-widest text-indigo-400 font-black">Register Closed</h2>
+                    <p class="text-slate-400 text-sm mb-6 font-medium">Ready for another day? Open the register to begin.</p>
+                    <button onclick="document.getElementById('start-sale-modal').classList.remove('hidden')" class="bg-indigo-600 px-8 py-3 rounded-2xl font-black active:scale-95 shadow-lg hover:shadow-indigo-500/20 transition-all uppercase text-xs tracking-widest">Start New Sale</button>
+                </div>
+                <div class="space-y-4">
+                    <h3 class="font-bold flex items-center gap-2 px-2 text-slate-500 uppercase text-xs tracking-widest"><i data-lucide="scroll" class="w-4 h-4 text-indigo-500"></i>Past Sale Reports</h3>
+                    ${closed.map(s => {
+                        const sSales = items.filter(i => i.sessionId === s.id && i.status === 'sold');
+                        const total = sSales.reduce((sum, item) => sum + (item.soldPrice || 0), 0);
+                        const isExp = expandedSessionId === s.id;
+                        const pSeller = {};
+                        if (isExp) sSales.forEach(i => { if(!pSeller[i.seller]) pSeller[i.seller]={t:0,i:0,txs:new Set()}; pSeller[i.seller].t+=i.soldPrice; pSeller[i.seller].i+=(i.qtySold||1); if(i.transactionId) pSeller[i.seller].txs.add(i.transactionId); });
+                        return `<div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div onclick="toggleSessionReport('${s.id}')" class="p-5 flex justify-between items-center cursor-pointer active:bg-slate-50 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-slate-100 rounded-xl"><i data-lucide="${isExp ? 'chevron-down' : 'chevron-right'}" class="w-4 h-4 text-slate-400"></i></div>
+                                    <div><div class="font-bold text-slate-800">${s.name}</div><div class="text-[10px] text-slate-400 uppercase font-black tracking-tighter">${s.date}</div></div>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="text-right">
+                                        <div class="text-lg font-black text-slate-700">$${total.toFixed(2)}</div>
+                                        <div class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">${sSales.length} records</div>
+                                    </div>
+                                    <button onclick="event.stopPropagation(); deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', '${s.id}'))" class="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>
+                            ${isExp ? `<div class="px-5 pb-5 pt-2 border-t border-slate-50 bg-slate-50/50 animate-in space-y-4">
+                                <button onclick="exportSessionCSV('${s.id}')" class="w-full bg-white text-indigo-600 border border-indigo-100 py-2.5 rounded-2xl text-[10px] font-black flex items-center justify-center gap-2 active:scale-95 shadow-sm transition-all uppercase tracking-widest"><i data-lucide="download" class="w-3 h-3"></i> Export Payouts (CSV)</button>
+                                <div>
+                                    <div class="text-[9px] font-black text-slate-300 uppercase mb-2 tracking-[0.2em] text-center">Seller Payouts</div>
+                                    <div class="grid grid-cols-1 gap-2">${Object.entries(pSeller).sort((a,b)=>b[1].t - a[1].t).map(([n,v])=>`<div class="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center"><div><div class="text-[10px] font-bold text-slate-700 uppercase tracking-tighter">${n}</div><div class="text-[9px] text-slate-400 font-semibold uppercase tracking-widest">${v.i} items • ${v.txs.size} txns</div></div><div class="text-sm font-black text-indigo-600">$${v.t.toFixed(2)}</div></div>`).join('')}</div>
+                                </div>
+                            </div>` : ''}</div>`;
+                    }).join('') || '<p class="text-center italic py-10 text-slate-300">No session history yet</p>'}
+                </div>
+            </div>`;
+        }
+
+        function renderInventory(container) {
+            const queryVal = inventorySearchQuery.toLowerCase();
+            const trackedItems = items.filter(i => (i.status === 'available' || i.status === 'sold-out') && i.type !== 'quick-sale' && i.name !== 'Quick Sale');
+
+            let gUnits = 0; let gValue = 0;
+            trackedItems.forEach(m => {
+                const av = m.quantity || 0;
+                const sales = items.filter(s => s.status === 'sold' && s.inventoryId === m.id);
+                const sQ = sales.reduce((a, s) => a + (s.qtySold || 1), 0);
+                const sV = sales.reduce((a, s) => a + (s.soldPrice || 0), 0);
+                gUnits += (av + sQ);
+                gValue += (av * m.askingPrice) + sV;
+            });
+
+            const grouped = {};
+            trackedItems.forEach(item => {
+                const s = item.seller || '??';
+                if (!grouped[s]) grouped[s] = [];
+                grouped[s].push(item);
+            });
+
+            container.innerHTML = `
+                <div class="brand-gradient p-6 rounded-[2.5rem] text-white shadow-xl space-y-4 animate-in">
+                    <div class="flex items-center gap-3 opacity-90"><i data-lucide="bar-chart-3" class="w-5 h-5"></i><h3 class="font-black text-[10px] uppercase tracking-[0.2em]">Inventory Summary</h3></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1"><div class="text-[10px] font-black text-indigo-100 uppercase tracking-widest">Units Managed</div><div class="text-3xl font-black">${gUnits}</div></div>
+                        <div class="space-y-1"><div class="text-[10px] font-black text-indigo-100 uppercase tracking-widest">Total Value</div><div class="text-3xl font-black">$${gValue.toFixed(2)}</div></div>
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <div class="relative flex-1">
+                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
+                        <input type="text" id="inventory-search" oninput="window.handleInventorySearch(this.value)" placeholder="Search Items or Sellers..." class="w-full pl-10 pr-4 py-3 rounded-2xl border border-slate-200 outline-none bg-white focus:border-indigo-500 font-bold text-sm shadow-sm" value="${inventorySearchQuery}">
+                    </div>
+                    <button onclick="toggleAddItem(true)" class="bg-indigo-600 text-white p-3 rounded-2xl shadow-lg active:scale-95 transition-all"><i data-lucide="plus-circle" class="w-6 h-6"></i></button>
+                </div>
+                
+                <div class="space-y-4">
+                    ${Object.entries(grouped).sort((a,b) => a[0].localeCompare(b[0])).map(([seller, sellerItems]) => {
+                        const filtered = sellerItems.filter(i => i.name.toLowerCase().includes(queryVal) || seller.toLowerCase().includes(queryVal));
+                        if (filtered.length === 0 && queryVal) return '';
+
+                        let sUnits = 0; let sVal = 0;
+                        sellerItems.forEach(m => {
+                            const av = m.quantity || 0;
+                            const sales = items.filter(s => s.status === 'sold' && s.inventoryId === m.id);
+                            sUnits += (av + sales.reduce((a,s)=>a+(s.qtySold||1),0));
+                            sVal += (av * m.askingPrice) + sales.reduce((a,s)=>a+(s.soldPrice||0),0);
+                        });
+
+                        const isExp = expandedSellers.has(seller);
+                        return `
+                        <div class="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+                            <div onclick="window.toggleSellerGroup('${seller}')" class="p-4 flex justify-between items-center cursor-pointer bg-slate-50/50 hover:bg-slate-100 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-white rounded-xl shadow-sm"><i data-lucide="${isExp ? 'chevron-down' : 'chevron-right'}" class="w-4 h-4 text-indigo-500"></i></div>
+                                    <div class="flex flex-col"><div class="text-sm font-black text-slate-800 uppercase tracking-tighter">${seller}</div><div class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">${sUnits} Units</div></div>
+                                </div>
+                                <div class="text-right"><div class="text-sm font-black text-indigo-600">$${sVal.toFixed(2)}</div><div class="text-[8px] text-slate-300 font-bold uppercase tracking-widest">Total Value</div></div>
+                            </div>
+                            ${isExp ? `<div class="p-4 space-y-3 animate-in bg-white">${filtered.map(i => {
+                                const isSO = i.status === 'sold-out' || i.quantity <= 0;
+                                const isItemEx = expandedInventoryId === i.id;
+                                const hist = items.filter(s => s.inventoryId === i.id && s.status === 'sold').sort((a,b) => b.soldAt - a.soldAt);
+                                return `<div class="border border-slate-100 rounded-2xl overflow-hidden ${isSO ? 'opacity-70 bg-slate-50' : 'bg-white'}">
+                                    <div onclick="event.stopPropagation(); toggleInventoryGroup('${i.id}')" class="p-3 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors">
+                                        <div class="flex flex-col"><div class="font-bold text-sm text-slate-700">${i.name} ${isSO ? '<span class="text-[8px] bg-red-100 text-red-500 px-1.5 py-0.5 rounded ml-1 font-black uppercase tracking-widest">Sold Out</span>' : ''}</div>
+                                        <div class="flex items-center gap-3 mt-0.5"><div class="text-xs font-black text-indigo-600">$${i.askingPrice.toFixed(2)}</div><div class="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">${i.quantity||0} IN STOCK</div></div></div>
+                                        <div class="flex gap-1">
+                                            <button onclick="event.stopPropagation(); window.toggleEditItem(true, '${i.id}')" class="text-indigo-400 p-2 hover:bg-indigo-50 rounded-lg transition-colors"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                                            <button onclick="event.stopPropagation(); deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'inventory', '${i.id}'))" class="text-red-400 p-2 hover:bg-red-50 rounded-lg transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                        </div>
+                                    </div>
+                                    ${isItemEx ? `<div class="px-3 pb-3 pt-1 border-t border-slate-50 bg-slate-50/50 space-y-1.5">
+                                        ${hist.map(s=>`<div class="flex justify-between items-center text-[10px] p-2 bg-white rounded-xl shadow-sm border border-slate-100 animate-in">
+                                            <span class="text-slate-500 font-bold uppercase tracking-tighter">${new Date(s.soldAt).toLocaleDateString()}</span>
+                                            <span class="font-black text-green-600">$${(s.actualUnitPrice||(s.soldPrice/(s.qtySold||1))).toFixed(2)} ea</span>
+                                        </div>`).join('') || '<div class="text-center italic text-slate-300 text-[9px] py-2 tracking-tight">No units sold yet</div>'}
+                                    </div>` : ''}
+                                </div>`;
+                            }).join('')}</div>` : ''}
+                        </div>`;
+                    }).join('') || `<p class="text-center py-10 text-slate-300 tracking-tighter italic">Inventory list is empty</p>`}
+                </div>`;
+            
+            setTimeout(() => { const input = document.getElementById('inventory-search'); if (input && inventorySearchQuery !== '') { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }}, 0);
+        }
+
+        function renderHistory(container) {
+            const sSold = items.filter(i => i.status === 'sold').sort((a,b) => b.soldAt - a.soldAt);
+            container.innerHTML = `<h3 class="font-bold flex items-center gap-2 px-2 text-slate-500 uppercase text-[10px] tracking-[0.2em] mb-4"><i data-lucide="history" class="w-4 h-4 text-indigo-500"></i>Live Sales Activity</h3>
+                <div class="space-y-3">
+                    ${sSold.map(i => `<div class="bg-white p-4 rounded-[1.5rem] border border-slate-200 flex justify-between items-start shadow-sm animate-in"><div><div class="flex items-center gap-2 font-bold text-sm text-slate-800">${i.name} <span class="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded uppercase font-black text-slate-500 tracking-tighter">${i.seller}</span></div><div class="text-[10px] text-slate-400 mt-1 flex items-center gap-1 font-bold uppercase tracking-tight"><span>${sessions.find(s=>s.id===i.sessionId)?.name||'Session'}</span> • ${new Date(i.soldAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div></div><div class="text-right flex flex-col items-end gap-1"><div class="font-black text-green-600 text-sm">$${i.soldPrice.toFixed(2)}</div><button onclick="undoSale('${i.id}')" class="text-[9px] text-slate-300 hover:text-red-500 underline font-black uppercase tracking-tighter transition-colors">Undo Sale</button></div></div>`).join('') || '<p class="text-center italic py-10 text-slate-300">Waiting for first sale...</p>'}
+                </div>`;
+        }
+
+        window.renderRegister = function() {
+            const total = cart.reduce((s, i) => s + (i.soldPrice * i.qty), 0);
+            const lastSeller = cart.length > 0 ? cart[cart.length-1].seller : '';
+            const availInv = items.filter(i => i.status === 'available' && i.quantity > 0 && i.type !== 'quick-sale' && i.name !== 'Quick Sale');
+            const modal = document.getElementById('register-modal');
+            modal.innerHTML = `<div class="bg-white w-full max-w-sm h-[95vh] sm:h-auto rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 shadow-2xl flex flex-col animate-in">
+                <div class="flex justify-between items-center mb-4"><div class="flex items-center gap-2"><i data-lucide="shopping-cart" class="text-indigo-600 w-6 h-6"></i><h3 class="text-xl font-black text-slate-800 tracking-tight uppercase tracking-widest">Register</h3></div><button onclick="toggleRegister(false)" class="text-slate-300 hover:text-slate-600 p-2 transition-colors"><i data-lucide="x"></i></button></div>
+                
+                <div class="bg-slate-50 p-4 rounded-2xl mb-4 shrink-0 space-y-3 border border-slate-100">
+                    <div class="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Quick Add (No Inventory)</div>
+                    <form onsubmit="addToCart(event)" class="grid grid-cols-2 gap-2">
+                        <input id="cart-seller" type="text" class="p-3 rounded-xl font-black uppercase outline-none text-sm border border-slate-200 focus:border-indigo-500 transition-colors" placeholder="Initials" value="${lastSeller}">
+                        <input id="cart-price" type="number" step="0.01" class="p-3 rounded-xl font-black text-green-600 outline-none text-sm border border-slate-200 focus:border-indigo-500 transition-colors" placeholder="0.00">
+                        <button type="submit" class="col-span-2 py-3 bg-slate-800 text-white rounded-xl font-black text-xs active:scale-95 transition-all shadow-md"><i data-lucide="plus" class="w-4 h-4 inline mr-1"></i> Add To Cart (Enter)</button>
+                    </form>
+                </div>
+
+                <div class="bg-indigo-50 p-4 rounded-2xl mb-4 shrink-0 space-y-2 border border-indigo-100 shadow-inner">
+                    <div class="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em]">Select From Inventory</div>
+                    <select id="reg-inventory-select" onchange="updateRegPriceField()" class="w-full p-3 rounded-xl text-xs font-black bg-white border border-indigo-100 outline-none focus:border-indigo-500 transition-colors shadow-sm">
+                        <option value="">Choose item...</option>
+                        ${availInv.map(i => `<option value="${i.id}">${i.name} ($${i.askingPrice.toFixed(2)}) — [${i.seller}]</option>`).join('')}
+                    </select>
+                    <div class="grid grid-cols-5 gap-2">
+                        <input id="reg-inventory-qty" type="number" value="1" min="1" class="p-3 rounded-xl font-black text-center bg-white border border-indigo-100 text-sm outline-none shadow-sm">
+                        <div class="col-span-2 relative"><input id="reg-inventory-price" type="number" step="0.01" class="w-full pl-3 p-3 rounded-xl font-black text-green-600 text-sm border border-indigo-100 bg-white outline-none focus:border-indigo-500 shadow-sm" placeholder="Price"></div>
+                        <button onclick="addInventoryToCart()" class="col-span-2 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase active:scale-95 transition-all shadow-md">Add Item</button>
+                    </div>
+                </div>
+
+                <div class="flex-1 overflow-y-auto space-y-2 py-2 border-y border-slate-50 min-h-[120px] hide-scroll">
+                    ${cart.map(i => `<div class="flex justify-between items-center p-3 bg-white border border-slate-100 rounded-2xl shadow-sm animate-in"><div><div class="flex items-center gap-2"><span class="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter">${i.seller}</span><span class="text-xs font-black text-slate-700">${i.name}</span></div><div class="text-[9px] uppercase mt-1 text-slate-400 font-bold tracking-widest">$${i.soldPrice.toFixed(2)} x ${i.qty}</div></div><button onclick="removeFromCart(${i.id})" class="text-red-300 hover:text-red-500 p-2 transition-colors"><i data-lucide="minus" class="w-4 h-4"></i></button></div>`).join('') || '<div class="text-center py-10 text-slate-300 italic text-sm tracking-widest">Cart is empty...</div>'}
+                </div>
+
+                <div class="pt-4 mt-auto space-y-3 shrink-0">
+                    <div class="flex justify-between items-center px-1"><span class="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Total Due</span><span class="text-2xl font-black text-slate-800">$${total.toFixed(2)}</span></div>
+                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex justify-between items-center shadow-inner">
+                        <div class="space-y-0.5"><label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cash Tendered</label><input id="cash-tendered" type="number" step="0.01" oninput="updateChangeDue(${total})" class="w-24 p-2 bg-white border border-slate-200 rounded-lg font-bold text-sm outline-none focus:border-indigo-500 shadow-sm" placeholder="0.00"></div>
+                        <div class="text-right"><div class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Change Back</div><div id="change-due" class="text-xl font-black text-indigo-600 tracking-tight">$0.00</div></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">${PAYMENT_METHODS.map(m => `<button onclick="checkout('${m.id}')" ${cart.length === 0 ? 'disabled' : ''} class="flex items-center justify-center gap-2 p-3 rounded-2xl border border-slate-200 active:scale-95 transition-all ${cart.length===0?'opacity-30':'hover:border-indigo-600 hover:bg-indigo-50 hover:text-indigo-600 shadow-sm'}"><i data-lucide="${m.icon}" class="w-4 h-4 ${m.color}"></i><span class="font-black text-xs uppercase tracking-tight">${m.label}</span></button>`).join('')}</div>
+                </div>
+            </div>`;
+            lucide.createIcons();
+            const sInput = document.getElementById('cart-seller'); if (sInput) sInput.focus();
+        };
+
+        // --- Core Subscription & Init ---
+
+        function subscribeToData() {
+            if (!auth.currentUser) return;
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (sn) => { items = sn.docs.map(d => ({ id: d.id, ...d.data() })); window.render(); }, (e) => { if(e.code === 'permission-denied') { document.getElementById('loading-spinner').classList.add('hidden'); document.getElementById('setup-message').classList.remove('hidden'); lucide.createIcons(); } });
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), (sn) => { sessions = sn.docs.map(d => ({ id: d.id, ...d.data() })); activeSession = sessions.find(s => s.status === 'open') || null; document.getElementById('register-btn').classList.toggle('hidden', !activeSession); document.getElementById('loading-screen').classList.add('hidden'); document.getElementById('main-content').classList.remove('hidden'); window.render(); });
+        }
+
+        async function init() {
+            onAuthStateChanged(auth, (user) => { if (user) subscribeToData(); else signInAnonymously(auth); });
+        }
+
+        // --- Action Functions ---
+
+        window.handleOpenRegister = async () => {
+            const name = document.getElementById('sale-session-name').value;
+            if (!name) return window.showNotification("Please name the sale session", "error");
+            try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), { name, status: 'open', openAt: Date.now(), date: new Date().toLocaleDateString() }); document.getElementById('start-sale-modal').classList.add('hidden'); } catch (e) {}
+        };
+
+        window.confirmCloseRegister = async () => {
+            try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', activeSession.id), { status: 'closed', closedAt: Date.now() }); document.getElementById('close-confirm-modal').classList.add('hidden'); } catch (e) {}
+        };
+
+        window.handleAddItem = async () => {
+            const name = document.getElementById('new-item-name').value;
+            const seller = document.getElementById('new-item-seller').value.trim().toUpperCase();
+            const price = parseFloat(document.getElementById('new-item-price').value);
+            const qty = parseInt(document.getElementById('new-item-qty').value) || 1;
+            if (!name || !seller || isNaN(price)) return window.showNotification("Missing item info", "error");
+            try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), { name, seller, askingPrice: price, quantity: qty, status: 'available', type: 'inventory', createdAt: Date.now() }); window.toggleAddItem(false); window.showNotification("Inventory Added!"); } catch (e) {}
+        };
+
+        window.handleUpdateItem = async () => {
+            if (!editingItemId) return;
+            const name = document.getElementById('edit-item-name').value;
+            const seller = document.getElementById('edit-item-seller').value.trim().toUpperCase();
+            const price = parseFloat(document.getElementById('edit-item-price').value);
+            const qty = parseInt(document.getElementById('edit-item-qty').value);
+            try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', editingItemId), { name, seller, askingPrice: price, quantity: qty, status: qty <= 0 ? 'sold-out' : 'available' }); window.toggleEditItem(false); window.showNotification("Updated Item!"); } catch (e) {}
+        };
+
+        window.addToCart = (e) => {
+            if (e) e.preventDefault();
+            const sellerInput = document.getElementById('cart-seller');
+            const priceInput = document.getElementById('cart-price');
+            const seller = sellerInput.value.toUpperCase();
+            const price = parseFloat(priceInput.value);
+            if (!seller || isNaN(price)) return;
+            cart.push({ id: Date.now(), name: 'Manual Item', seller, askingPrice: price, soldPrice: price, qty: 1, isInventory: false });
+            window.renderRegister();
+        };
+
+        window.addInventoryToCart = () => {
+            const id = document.getElementById('reg-inventory-select').value;
+            const qty = parseInt(document.getElementById('reg-inventory-qty').value);
+            const actual = parseFloat(document.getElementById('reg-inventory-price').value);
+            const item = items.find(i => i.id === id);
+            if (!item || isNaN(actual)) return;
+            cart.push({ id: Date.now(), inventoryId: item.id, name: item.name, seller: item.seller, askingPrice: item.askingPrice, soldPrice: actual, qty: qty, isInventory: true });
+            window.renderRegister();
+        };
+
+        window.checkout = async (method) => {
+            if (cart.length === 0 || !activeSession) return;
+            const txId = `TXN-${Date.now()}`;
+            try {
+                for (const item of cart) {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), {
+                        name: item.name, seller: item.seller, askingPrice: item.askingPrice, soldPrice: item.soldPrice * item.qty,
+                        actualUnitPrice: item.soldPrice, status: 'sold', type: item.isInventory ? 'inventory' : 'quick-sale',
+                        paymentMethod: method, transactionId: txId, sessionId: activeSession.id, inventoryId: item.inventoryId || null, qtySold: item.qty, soldAt: Date.now()
+                    });
+                    if (item.isInventory) {
+                        const original = items.find(i => i.id === item.inventoryId);
+                        const newQty = Math.max(0, (original.quantity || 0) - item.qty);
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', item.inventoryId), { quantity: newQty, status: newQty <= 0 ? 'sold-out' : 'available' });
+                    }
+                }
+                cart = []; window.toggleRegister(false); window.showNotification("Checked Out Successfully!");
+            } catch (e) { window.showNotification("Checkout Error", "error"); }
+        };
+
+        window.undoSale = async (id) => {
+            try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', id), { status: 'available', soldPrice: null, soldAt: null, sessionId: null }); } catch (e) {}
+        };
+
+        window.updateChangeDue = (total) => {
+            const tendered = parseFloat(document.getElementById('cash-tendered').value) || 0;
+            const el = document.getElementById('change-due');
+            if (el) { el.innerText = `$${Math.max(0, tendered - total).toFixed(2)}`; el.classList.toggle('text-red-500', (tendered - total) < 0 && tendered > 0); }
+        };
+
+        window.exportSessionCSV = (sessionId) => {
+            const session = sessions.find(s => s.id === sessionId);
+            const sales = items.filter(i => i.sessionId === sessionId && i.status === 'sold');
+            const headers = ["Date", "Item Name", "Seller", "Asking Price", "Sold Price", "Qty", "Payment"];
+            const rows = sales.map(i => [`"${new Date(i.soldAt).toLocaleDateString()}"`, `"${i.name}"`, `"${i.seller}"`, i.askingPrice.toFixed(2), (i.soldPrice / (i.qtySold || 1)).toFixed(2), i.qtySold || 1, `"${i.paymentMethod}"`]);
+            const csv = "data:text/csv;charset=utf-8," + [headers, ...rows].map(e => e.join(",")).join("\n");
+            const link = document.createElement("a"); link.setAttribute("href", encodeURI(csv)); link.setAttribute("download", `Report_${session.name}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        };
+
+        window.handleInventorySearch = (val) => { inventorySearchQuery = val; window.render(); };
+        window.toggleRegister = (show) => { const modal = document.getElementById('register-modal'); if (show) { modal.classList.remove('hidden'); window.renderRegister(); } else { modal.classList.add('hidden'); } };
+        window.toggleAddItem = (show) => { const modal = document.getElementById('add-item-modal'); if (show) { document.getElementById('new-item-name').value = ''; document.getElementById('new-item-seller').value = ''; document.getElementById('new-item-price').value = ''; document.getElementById('new-item-qty').value = '1'; modal.classList.remove('hidden'); document.getElementById('new-item-name').focus(); } else modal.classList.add('hidden'); };
+        window.toggleEditItem = (show, itemId = null) => { const modal = document.getElementById('edit-item-modal'); if (show && itemId) { const item = items.find(i => i.id === itemId); if (!item) return; editingItemId = itemId; document.getElementById('edit-item-name').value = item.name; document.getElementById('edit-item-seller').value = item.seller; document.getElementById('edit-item-price').value = item.askingPrice; document.getElementById('edit-item-qty').value = item.quantity || 0; modal.classList.remove('hidden'); } else modal.classList.add('hidden'); };
+        window.toggleSessionReport = (id) => { expandedSessionId = (expandedSessionId === id) ? null : id; window.render(); };
+        window.toggleSellerGroup = (seller) => { if (expandedSellers.has(seller)) expandedSellers.delete(seller); else expandedSellers.add(seller); window.render(); };
+        window.toggleInventoryGroup = (id) => { expandedInventoryId = (expandedInventoryId === id) ? null : id; window.render(); };
+        window.switchView = (v) => { currentView = v; ['dashboard', 'inventory', 'history'].forEach(nav => { const el = document.getElementById(`nav-${nav}`); if (el) { el.classList.toggle('text-indigo-600', nav === v); el.classList.toggle('text-slate-400', nav !== v); } }); window.render(); };
+        window.updateRegPriceField = () => { const item = items.find(i => i.id === document.getElementById('reg-inventory-select').value); if (item) document.getElementById('reg-inventory-price').value = item.askingPrice; };
+        window.handleCloseRegister = () => { document.getElementById('close-confirm-modal').classList.remove('hidden'); };
+        window.deleteDoc = deleteDoc; window.doc = doc; window.db = db; window.appId = appId;
+        init();
+    </script>
+</body>
+</html>
