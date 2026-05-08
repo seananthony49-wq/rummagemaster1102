@@ -65,7 +65,7 @@
 
             <main id="view-container" class="max-w-md mx-auto p-4 space-y-6"></main>
 
-            <!-- Navigation Bottom Bar (Optimized for Clean Hosting) -->
+            <!-- Navigation Bottom Bar -->
             <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 flex justify-between items-center z-40 max-w-lg mx-auto rounded-t-3xl shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.1)]">
                 <button onclick="switchView('dashboard')" id="nav-dashboard" class="flex flex-col items-center gap-1 transition-colors text-indigo-600">
                     <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
@@ -122,7 +122,7 @@
                 </div>
                 <div class="flex gap-3 pt-2">
                     <button type="button" onclick="toggleEditItem(false)" class="flex-1 py-4 font-bold text-slate-400 uppercase text-xs tracking-widest">Cancel</button>
-                    <button type="submit" class="flex-[2] py-4 font-black text-white bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-100 active:scale-95 transition-all uppercase text-xs tracking-widest">Update</button>
+                    <button type="submit" class="flex-[2] py-4 font-black text-white bg-indigo-600 rounded-xl shadow-lg active:scale-95 transition-all uppercase text-xs tracking-widest">Update</button>
                 </div>
             </form>
         </div>
@@ -169,11 +169,13 @@
         let sessions = [];
         let activeSession = null;
         let cart = [];
-        let expandedSessionId = null; 
-        let expandedInventoryId = null;
-        let expandedSellers = new Set();
         let editingItemId = null;
         let inventorySearchQuery = '';
+
+        // Reporting State
+        let expandedSessionId = null; 
+        let expandedReportDates = new Set(); // Stores sessionId_date
+        let expandedReportSellers = new Set(); // Stores sessionId_date_seller
 
         const PAYMENT_METHODS = [
             { id: 'cash', label: 'Cash', icon: 'banknote', color: 'text-green-600' },
@@ -286,30 +288,85 @@
                     <h3 class="font-black flex items-center gap-2 px-2 text-slate-400 uppercase text-[10px] tracking-[0.25em]"><i data-lucide="scroll" class="w-4 h-4"></i>Past Session Reports</h3>
                     ${closed.map(s => {
                         const sSales = items.filter(i => i.sessionId === s.id && i.status === 'sold');
-                        const total = sSales.reduce((sum, item) => sum + (item.soldPrice || 0), 0);
-                        const isExp = expandedSessionId === s.id;
-                        const pSeller = {};
-                        if (isExp) sSales.forEach(i => { if(!pSeller[i.seller]) pSeller[i.seller]={t:0,i:0,txs:new Set()}; pSeller[i.seller].t+=i.soldPrice; pSeller[i.seller].i+=(i.qtySold||1); if(i.transactionId) pSeller[i.seller].txs.add(i.transactionId); });
+                        const sessionTotal = sSales.reduce((sum, item) => sum + (item.soldPrice || 0), 0);
+                        const isSessionExp = expandedSessionId === s.id;
+
+                        // Level 2: Dates in Session
+                        const datesInSession = [...new Set(sSales.map(i => new Date(i.soldAt).toLocaleDateString()))].sort((a, b) => new Date(b) - new Date(a));
+
                         return `<div class="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden mb-3">
                             <div onclick="toggleSessionReport('${s.id}')" class="p-5 flex justify-between items-center cursor-pointer active:bg-slate-50 transition-colors">
                                 <div class="flex items-center gap-4">
-                                    <div class="p-2.5 bg-slate-100 rounded-2xl"><i data-lucide="${isExp ? 'chevron-down' : 'chevron-right'}" class="w-4 h-4 text-slate-500"></i></div>
+                                    <div class="p-2.5 bg-slate-100 rounded-2xl"><i data-lucide="${isSessionExp ? 'chevron-down' : 'chevron-right'}" class="w-4 h-4 text-slate-500"></i></div>
                                     <div><div class="font-black text-slate-800 uppercase tracking-tighter">${s.name}</div><div class="text-[9px] text-slate-300 uppercase font-black">${s.date}</div></div>
                                 </div>
                                 <div class="flex items-center gap-4">
                                     <div class="text-right">
-                                        <div class="text-lg font-black text-indigo-600">$${total.toFixed(2)}</div>
+                                        <div class="text-lg font-black text-indigo-600">$${sessionTotal.toFixed(2)}</div>
                                         <div class="text-[9px] text-slate-300 font-bold uppercase tracking-widest">${sSales.length} items</div>
                                     </div>
                                     <button onclick="event.stopPropagation(); deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', '${s.id}'))" class="text-red-200 hover:text-red-500 p-2 transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                                 </div>
                             </div>
-                            ${isExp ? `<div class="px-6 pb-6 pt-2 border-t border-slate-50 bg-slate-50/50 animate-in space-y-5">
-                                <button onclick="exportSessionCSV('${s.id}')" class="w-full bg-white text-indigo-600 border border-indigo-100 py-3 rounded-2xl text-[10px] font-black flex items-center justify-center gap-2 active:scale-95 shadow-sm transition-all uppercase tracking-widest"><i data-lucide="download" class="w-3 h-3"></i> Export Payouts (CSV)</button>
-                                <div>
-                                    <div class="text-[9px] font-black text-slate-300 uppercase mb-3 tracking-[0.2em] text-center">Payout Breakdown</div>
-                                    <div class="grid grid-cols-1 gap-2">${Object.entries(pSeller).sort((a,b)=>b[1].t - a[1].t).map(([n,v])=>`<div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center"><div><div class="text-sm font-black text-slate-700 tracking-tighter uppercase">${n}</div><div class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">${v.i} units • ${v.txs.size} txns</div></div><div class="text-sm font-black text-green-600">$${v.t.toFixed(2)}</div></div>`).join('')}</div>
-                                </div>
+                            ${isSessionExp ? `
+                            <div class="px-5 pb-5 pt-2 border-t border-slate-50 bg-slate-50/30 animate-in space-y-3">
+                                <button onclick="exportSessionCSV('${s.id}')" class="w-full bg-white text-indigo-600 border border-indigo-100 py-3 rounded-2xl text-[10px] font-black flex items-center justify-center gap-2 active:scale-95 shadow-sm transition-all uppercase tracking-widest mb-2"><i data-lucide="download" class="w-3 h-3"></i> Full Session Export</button>
+                                
+                                <!-- Level 2: Dates -->
+                                ${datesInSession.map(dateStr => {
+                                    const dateId = `${s.id}_${dateStr}`;
+                                    const isDateExp = expandedReportDates.has(dateId);
+                                    const itemsOnDate = sSales.filter(i => new Date(i.soldAt).toLocaleDateString() === dateStr);
+                                    const dateTotal = itemsOnDate.reduce((sum, i) => sum + i.soldPrice, 0);
+                                    const sellersOnDate = [...new Set(itemsOnDate.map(i => i.seller))].sort();
+
+                                    return `
+                                    <div class="border border-slate-200 rounded-[1.5rem] bg-white overflow-hidden shadow-sm">
+                                        <div onclick="toggleReportDate('${dateId}')" class="p-4 flex justify-between items-center cursor-pointer bg-slate-50/50 hover:bg-slate-100 transition-colors">
+                                            <div class="flex items-center gap-3">
+                                                <i data-lucide="${isDateExp ? 'calendar-days' : 'calendar'}" class="w-4 h-4 text-indigo-400"></i>
+                                                <span class="text-xs font-black text-slate-600 uppercase tracking-widest">${dateStr}</span>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="text-sm font-black text-slate-800">$${dateTotal.toFixed(2)}</div>
+                                            </div>
+                                        </div>
+                                        ${isDateExp ? `
+                                        <div class="p-3 bg-white space-y-2 animate-in border-t border-slate-100">
+                                            <!-- Level 3: Sellers -->
+                                            ${sellersOnDate.map(seller => {
+                                                const sellerDateId = `${dateId}_${seller}`;
+                                                const isSellerExp = expandedReportSellers.has(sellerDateId);
+                                                const sellerItems = itemsOnDate.filter(i => i.seller === seller);
+                                                const sellerTotal = sellerItems.reduce((sum, i) => sum + i.soldPrice, 0);
+
+                                                return `
+                                                <div class="rounded-2xl border border-slate-100 overflow-hidden">
+                                                    <div onclick="toggleReportSeller('${sellerDateId}')" class="p-3 flex justify-between items-center cursor-pointer hover:bg-indigo-50/30 transition-colors">
+                                                        <div class="flex items-center gap-3">
+                                                            <div class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-black uppercase">${seller.charAt(0)}</div>
+                                                            <span class="text-xs font-bold text-slate-700">${seller}</span>
+                                                        </div>
+                                                        <div class="text-sm font-black text-indigo-600">$${sellerTotal.toFixed(2)}</div>
+                                                    </div>
+                                                    ${isSellerExp ? `
+                                                    <div class="px-3 pb-3 pt-1 space-y-1 bg-slate-50/50 animate-in border-t border-slate-50">
+                                                        ${sellerItems.map(si => `
+                                                            <div class="flex justify-between items-center text-[10px] p-2 bg-white rounded-xl shadow-sm border border-slate-100">
+                                                                <span class="text-slate-500">${si.name}</span>
+                                                                <span class="font-black text-slate-700">$${si.soldPrice.toFixed(2)}</span>
+                                                            </div>
+                                                        `).join('')}
+                                                    </div>
+                                                    ` : ''}
+                                                </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                    `;
+                                }).join('')}
                             </div>` : ''}</div>`;
                     }).join('') || '<p class="text-center italic py-16 text-slate-300 text-sm tracking-widest uppercase">No session history yet</p>'}
                 </div>
@@ -387,7 +444,7 @@
                                         <div class="flex flex-col"><div class="font-black text-sm text-slate-700 tracking-tight">${i.name} ${isSO ? '<span class="text-[8px] bg-red-50 text-red-500 px-2 py-0.5 rounded-lg ml-1 uppercase">Out</span>' : ''}</div>
                                         <div class="flex items-center gap-3 mt-1"><div class="text-xs font-black text-green-600">$${i.askingPrice.toFixed(2)}</div><div class="text-[9px] text-slate-300 font-black uppercase tracking-widest">${i.quantity||0} IN STOCK</div></div></div>
                                         <div class="flex gap-2">
-                                            <button onclick="event.stopPropagation(); window.toggleEditItem(true, '${i.id}')" class="text-indigo-400 p-2 hover:bg-indigo-50 rounded-xl transition-colors"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                                            <button onclick="event.stopPropagation(); window.toggleEditItem(true, '${i.id}')" class="text-indigo-400 p-2 hover:bg-indigo-50 rounded-lg transition-colors"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
                                             <button onclick="event.stopPropagation(); deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'inventory', '${i.id}'))" class="text-red-400 p-2 hover:bg-red-50 rounded-xl transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                                         </div>
                                     </div>
@@ -420,7 +477,6 @@
             const availInv = items.filter(i => i.status === 'available' && i.quantity > 0 && i.type !== 'quick-sale' && i.name !== 'Quick Sale');
             const modal = document.getElementById('register-modal');
             
-            // Constrain outer modal to 92vh and ensure overflow is hidden on the main box
             modal.innerHTML = `<div class="bg-white w-full max-w-sm max-h-[92vh] sm:h-auto rounded-t-[2.5rem] sm:rounded-[2.5rem] p-5 shadow-2xl flex flex-col animate-in overflow-hidden">
                 <div class="flex justify-between items-center mb-3 flex-shrink-0">
                     <div class="flex items-center gap-3">
@@ -433,7 +489,6 @@
                     </div>
                 </div>
                 
-                <!-- Entry Forms (Fixed Height Area) -->
                 <div class="flex-shrink-0 space-y-2 mb-3">
                     <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-inner">
                         <form onsubmit="addToCart(event)" class="grid grid-cols-2 gap-2">
@@ -456,7 +511,6 @@
                     </div>
                 </div>
 
-                <!-- Scrolling Cart List (Flexible Height Area) -->
                 <div class="flex-1 overflow-y-auto space-y-2 py-2 border-y border-slate-100 min-h-0 hide-scroll">
                     ${cart.map(i => `<div class="flex justify-between items-center p-3 bg-white border border-slate-50 rounded-2xl shadow-sm animate-in">
                         <div>
@@ -467,7 +521,6 @@
                     </div>`).join('') || '<div class="text-center py-6 text-slate-200 font-black uppercase text-[10px] tracking-[0.3em] italic">Cart is empty...</div>'}
                 </div>
 
-                <!-- Checkout Actions (Fixed Height Area) -->
                 <div class="pt-3 flex-shrink-0 space-y-2">
                     <div class="flex justify-between items-center px-1">
                         <span class="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em]">Amount Due</span>
@@ -616,7 +669,28 @@
         window.toggleRegister = (show) => { const modal = document.getElementById('register-modal'); if (show) { modal.classList.remove('hidden'); window.renderRegister(); } else { modal.classList.add('hidden'); } };
         window.toggleAddItem = (show) => { const modal = document.getElementById('add-item-modal'); if (show) { document.getElementById('new-item-name').value = ''; document.getElementById('new-item-seller').value = ''; document.getElementById('new-item-price').value = ''; document.getElementById('new-item-qty').value = '1'; modal.classList.remove('hidden'); document.getElementById('new-item-name').focus(); } else modal.classList.add('hidden'); };
         window.toggleEditItem = (show, itemId = null) => { const modal = document.getElementById('edit-item-modal'); if (show && itemId) { const item = items.find(i => i.id === itemId); if (!item) return; editingItemId = itemId; document.getElementById('edit-item-name').value = item.name; document.getElementById('edit-item-seller').value = item.seller; document.getElementById('edit-item-price').value = item.askingPrice; document.getElementById('edit-item-qty').value = item.quantity || 0; modal.classList.remove('hidden'); } else modal.classList.add('hidden'); };
-        window.toggleSessionReport = (id) => { expandedSessionId = (expandedSessionId === id) ? null : id; window.render(); };
+        
+        // --- Multi-Level Reporting Toggles ---
+        window.toggleSessionReport = (id) => { 
+            expandedSessionId = (expandedSessionId === id) ? null : id; 
+            // Reset lower levels when closing or switching sessions
+            expandedReportDates.clear();
+            expandedReportSellers.clear();
+            window.render(); 
+        };
+
+        window.toggleReportDate = (dateId) => {
+            if (expandedReportDates.has(dateId)) expandedReportDates.delete(dateId);
+            else expandedReportDates.add(dateId);
+            window.render();
+        };
+
+        window.toggleReportSeller = (sellerDateId) => {
+            if (expandedReportSellers.has(sellerDateId)) expandedReportSellers.delete(sellerDateId);
+            else expandedReportSellers.add(sellerDateId);
+            window.render();
+        };
+
         window.toggleSellerGroup = (seller) => { if (expandedSellers.has(seller)) expandedSellers.delete(seller); else expandedSellers.add(seller); window.render(); };
         window.toggleInventoryGroup = (id) => { expandedInventoryId = (expandedInventoryId === id) ? null : id; window.render(); };
         window.switchView = (v) => { currentView = v; ['dashboard', 'inventory', 'history'].forEach(nav => { const el = document.getElementById(`nav-${nav}`); if (el) { el.classList.toggle('text-indigo-600', nav === v); el.classList.toggle('text-slate-400', nav !== v); } }); window.render(); };
